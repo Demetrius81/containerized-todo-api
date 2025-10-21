@@ -1,0 +1,103 @@
+version: "3.9"
+
+services:
+  database:
+    image: "postgres:latest"
+    container_name: postgres-todo-api
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: containerezed_todo_api
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: 12345
+    ports:
+      - "5432:5432"
+    # env_file:
+    #   - .env
+    networks:
+      - pgnet
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d
+
+  # pgadmin:
+  #   image: dpage/pgadmin4:latest
+  #   container_name: pgadmin-todo-api
+  #   restart: always
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: admin@example.com
+  #     PGADMIN_DEFAULT_PASSWORD: admin123
+  #   volumes:
+  #     - pgadmin_data:/var/lib/pgadmin
+  #   ports:
+  #     - "5050:80"
+  #   depends_on:
+  #     - database
+  #   networks:
+  #     - pgnet
+
+  todo-api:
+    build: .
+    container_name: containerized-todo-api
+    # restart: always
+    environment:
+      DATABASE_URL: postgres://admin:admin123@postgres-todo-api:5432/containerezed_todo_api?sslmode=disable
+      HOST: 5002
+    ports:
+      - "5002:5002"
+    depends_on:
+      - database
+    networks:
+      - pgnet
+
+  postgres_exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    container_name: postgres_exporter
+    restart: always
+    environment:
+      DATA_SOURCE_NAME: postgres://admin:admin123@postgres-todo-api:5432/containerezed_todo_api?sslmode=disable
+    ports:
+      - "9187:9187"
+    depends_on:
+      - database
+    networks:
+      - pgnet
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: always
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./data/prometheus:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - postgres_exporter
+      # - todo-api
+    networks:
+      - pgnet
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - pgnet
+
+volumes:
+  postgres_data:
+#   pgadmin_data:
+
+networks:
+  pgnet:
+    # driver: bridge
